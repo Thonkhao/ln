@@ -1,0 +1,65 @@
+/**
+ * Order Tracking Styles
+ * 
+ * ใช้สำหรับ ordertrackingMOT.php, ordertrackingOVS.php, ordertrackingTRT.php
+ */
+
+/* Type Circle Badge */
+.type-circle { 
+    width: 28px; 
+    height: 28px; 
+    border-radius: 50%; 
+    border: 2px solid; 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 11px; 
+    font-weight: 600; 
+}
+
+/* Status Badge */
+.status-badge { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 5px; 
+    border: 1px solid; 
+    border-radius: 12px; 
+    padding: 3px 10px; 
+    font-size: 12px; 
+    white-space: nowrap; 
+}
+
+/* Tab Navigation */
+#orderStatusTabs .nav-link { 
+    border-radius: 20px; 
+    margin-right: 5px; 
+    font-size: 14px; 
+    transition: all 0.2s; 
+}
+#orderStatusTabs .nav-link:not(.active) { 
+    color: #6c757d; 
+}
+#orderStatusTabs .nav-link:hover:not(.active) { 
+    background-color: #f8f9fa; 
+}
+
+/* DataTable - Fixed column widths */
+#orderTrackingDataTable { 
+    table-layout: fixed !important; 
+    width: 100% !important; 
+}
+#orderTrackingDataTable th,
+#orderTrackingDataTable td {
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: middle;
+}
+#orderTrackingDataTable th { 
+    font-weight: 600; 
+    text-align: center; 
+}
+
+/* DataTable Wrapper - Horizontal scroll */
+.dataTables_wrapper { 
+    overflow-x: auto; 
+}

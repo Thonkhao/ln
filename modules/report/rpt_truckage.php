@@ -1,0 +1,119 @@
+<?php
+mb_internal_encoding('UTF-8');
+require '../../../dbconnect/Connect.php';
+
+/**
+ * Backend สำหรับ Truckage Report (wnv-report-truckage)
+ * เรียกผ่าน views/modules/report/truckage_report.php (form GET, target="_blank")
+ *
+ * ชื่อ parameter ฝั่ง SSRS ที่ report ต้องการจริง (เช็คจากหน้า parameter ของ report ใน
+ * SSRS แล้ว): pConnectionString, Comp, DateF, DateT, TruckNumF, TruckNumT, VendNumF,
+ * VendNumT, LicenseF, LicenseT, TruckageType, Stat
+ * TruckageType/Stat: ฝั่งฟอร์ม (truckage_report.js) รวมค่า checkbox ที่ติ๊กไว้เป็น string เดียวก่อนส่ง
+ * (เช่น truckageType[] ติ๊กครบ 3 อัน -> "123") จึงเป็น scalar parameter ไม่ใช่ multi-value
+ * report ยังมี BG_USERID, BG_SITEID, BG_COMPANYNAME, pSite เพิ่มเติม แต่เป็น optional/มี
+ * default อยู่แล้ว จึงไม่จำเป็นต้องส่งจากฟอร์มนี้
+ */
+
+$ReportName = $_GET['report'] ?? '';
+$ReportName_dateNow = preg_replace('/[^A-Za-z0-9_-]/', '_', $ReportName) . '_' . date('Ymd_His');
+
+$L_report = $_ENV['L_report'];
+$ssrs_url = $L_report . $ReportName;
+
+# Report Server Login
+$U_report = $_ENV['U_report'];
+$P_report = $_ENV['P_report'];
+$DB_HOST = $_ENV['DB_HOST'];
+$DB_DATABASE = $_ENV['DB_DATABASE'];
+
+// mode: preview = เปิดดูในแท็บ (inline) / print = ดาวน์โหลดเพื่อสั่งพิมพ์ (attachment)
+$mode = ($_GET['mode'] ?? 'preview') === 'print' ? 'print' : 'preview';
+$rsFormat = !empty($_GET['format']) ? $_GET['format'] : 'PDF';
+
+
+    $params = [
+        'rs:Format' => $rsFormat,
+        'pConnectionString' => "Data Source=$DB_HOST;Initial Catalog=$DB_DATABASE",
+        'Comp' => !empty($_GET['company']) ? $_GET['company'] : '2000',
+
+        'DateF' => !empty($_GET['DateS']) ? $_GET['DateS'] : null,
+        'DateT' => !empty($_GET['DateE']) ? $_GET['DateE'] : null,
+        'TruckNumF' => !empty($_GET['TrkNumS']) ? $_GET['TrkNumS'] : null,
+        'TruckNumT' => !empty($_GET['TrkNumE']) ? $_GET['TrkNumE'] : null,
+        'VendNumF' => !empty($_GET['VendorS']) ? $_GET['VendorS'] : null,
+        'VendNumT' => !empty($_GET['VendorE']) ? $_GET['VendorE'] : null,
+        'LicenseF' => !empty($_GET['PlateS']) ? $_GET['PlateS'] : null,
+        'LicenseT' => !empty($_GET['PlateE']) ? $_GET['PlateE'] : null,
+        // truckageType/status: ฝั่งฟอร์มรวมค่า checkbox ที่ติ๊กไว้เป็น string เดียวมาให้แล้ว (เช่น ติ๊กครบ 3 อัน -> "123")
+        // จึงส่งเป็น scalar parameter ตัวเดียว ไม่ใช่ multi-value
+        'TruckageType' => !empty($_GET['truckageType']) ? $_GET['truckageType'] : null,
+        'Stat' => !empty($_GET['status']) ? $_GET['status'] : null,
+    ];
+
+
+// สร้าง query string พารามิเตอร์แบบ scalar (ค่าเดียว)
+$query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+
+// สร้าง URL สำหรับเรียกดูรายงาน
+$url = $ssrs_url . '&' . $query;
+
+// เริ่มต้น cURL
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_USERPWD, "$U_report:$P_report");
+curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC | CURLAUTH_NTLM);
+curl_setopt($ch, CURLOPT_HEADER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+$response = curl_exec($ch);
+
+if (curl_errno($ch)) {
+    echo 'cURL Error: ' . curl_error($ch);
+    exit;
+}
+
+$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+
+$isPdf = strpos($response, '%PDF') === 0;
+$isXlsx = strpos($response, 'PK') === 0;
+
+if ($http_code == 200 && ($isPdf || $isXlsx)) {
+    $disposition = $mode === 'preview' ? 'inline' : 'attachment';
+    if ($isPdf) {
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: ' . $disposition . '; filename="' . $ReportName_dateNow . '.pdf"');
+    } else {
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: ' . $disposition . '; filename="' . $ReportName_dateNow . '.xlsx"');
+    }
+    echo $response;
+} else {
+    if (strpos($response, 'rsCredentialsNotSpecified') !== false) {
+        echo "เกิดข้อผิดพลาด: ระบบต้องการ Credential สำหรับ Data Source แต่ยังไม่ได้ตั้งค่าไว้ใน SSRS\n";
+        echo "วิธีแก้:\n";
+        echo "1. เข้าไปที่ Web Portal: /Reports แล้วเปิด Data Source ที่รายงานใช้\n";
+        echo "2. เลือก Stored Credentials และกรอก SQL Login / Password ที่ถูกต้อง หรือใช้ Windows Integrated หาก IIS account มีสิทธิ์\n";
+        echo "3. กด Test Connection ให้ผ่าน แล้ว Save\n";
+        echo "4. กลับมาลองเรียก URL รายงานอีกครั้ง\n";
+    } elseif (strpos($response, 'rsProcessingAborted') !== false) {
+        echo "เกิดข้อผิดพลาด: การประมวลผลรายงานถูกยกเลิก (rsProcessingAborted)\n";
+        echo "สาเหตุทั่วไป: พารามิเตอร์ไม่ถูกต้อง / Data Source ล้มเหลว / Timeout\n";
+    } elseif (strpos($response, 'rsErrorOpeningConnection') !== false) {
+        echo "เกิดข้อผิดพลาด: ไม่สามารถเชื่อมต่อ Data Source (rsErrorOpeningConnection)\n";
+    } else {
+        echo "ไม่สามารถดึงรายงานได้\n";
+        echo "HTTP code: $http_code\n";
+
+        // ดึงเฉพาะ meta tag ที่มีประโยชน์ (Message มักบอกชื่อ parameter ที่ผิด/ที่ต้องการตรง ๆ)
+        if (preg_match_all('/<meta name="([^"]+)" content="([^"]*)"\s*\/>/', $response, $matches, PREG_SET_ORDER)) {
+            echo "SSRS Error Detail:\n";
+            foreach ($matches as $m) {
+                echo "- {$m[1]}: {$m[2]}\n";
+            }
+        } else {
+            echo "Response (full):\n" . htmlentities(substr($response, 0, 3000));
+        }
+    }
+}

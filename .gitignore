@@ -1,0 +1,54 @@
+// System / Log files 
+*.DS_Store
+*.log
+nul
+
+// Archives
+*.zip
+
+// Sass Cache
+.sass-cache
+
+// Project files
+.idea
+nbproject
+nbproject/private
+.vscode/
+.vs/
+.env
+test.php
+// Node / Bower
+node_modules/
+
+
+// Plugins
+/plugins/*/*.md
+/plugins/*/*.html
+/plugins/*/package.json
+
+
+// Docs
+Gemfile.lock
+docs/_site
+docs_html/
+.jekyll-cache/
+.jekyll-metadata
+
+// ETC
+TODO
+test.html
+ad.js
+Connect.php
+
+//InView
+plugins/
+bower_components/
+build/
+CustomFileInputs/
+dist/
+vendor/ 
+dbconnect/
+PHPMailer/
+
+fontawesome/
+pages/
